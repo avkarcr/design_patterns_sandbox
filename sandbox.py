@@ -1,5 +1,5 @@
 # Simple Example
-
+from loguru import logger
 import asyncio
 import datetime as dt
 from abc import ABC, abstractmethod
@@ -33,9 +33,7 @@ class Listing(Subject):
     def __init__(self):
         self.__users: List[Observer] = []
         self.__data: Dict[str, float] = {}
-        self.__symbols: List[str] = []
         self.__mexc = mexc_market('https://api.mexc.com')
-        self.__queue = asyncio.Queue()
         self.running_state = True
 
     def register_observer(self, observer) -> None:
@@ -50,37 +48,6 @@ class Listing(Subject):
 
     def data_changed(self) -> None:
         self.notify_users()
-
-    async def add_symbol(self, symbol: str):
-        await self.__queue.put(('add', symbol))
-
-    async def remove_symbol(self, symbol: str):
-        await self.__queue.put(('remove', symbol))
-
-    async def manage_symbols(self):
-        while self.running_state:
-            action, symbol = await self.__queue.get()
-            if action == 'add':
-                if symbol not in self.__symbols:
-                    self.__symbols.append(symbol)
-                    print(f'Добавили символ {symbol}')
-            elif action == 'remove':
-                if symbol in self.__symbols:
-                    self.__symbols.remove(symbol)
-                    print(f'Удалили символ {symbol}')
-            self.__queue.task_done()
-
-    async def start_fetching(self):
-        while self.running_state:
-            print(f'НАЧАЛО ЦИКЛА. Список символов: {self.__symbols}')
-            if not self.__symbols:
-                print('Список символов пустой, ничего не делаем 1 секунду...')
-                await asyncio.sleep(1)
-                continue
-            tasks = [self.fetch_price(symbol) for symbol in self.__symbols]
-            await asyncio.gather(*tasks)
-            await asyncio.sleep(1)
-            print('КОНЕЦ ЦИКЛА')
 
     async def fetch_price(self, symbol: str) -> None:
         duration = 5
@@ -116,6 +83,14 @@ class User(Observer):
 
 
 async def main():
+    logger.remove()  # Удаляем стандартный обработчик
+    logger.add(
+        lambda msg: print(msg, end=""),
+        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level><u>{level: <8}</u></level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+        level="DEBUG",
+        colorize=True,
+    )
+
     listing = Listing()
     user1 = User(listing)
 
@@ -135,11 +110,16 @@ async def main():
         misfire_grace_time=5,
         kwargs={'symbol': 'ETHUSDT'}
     )
+    scheduler.add_job(
+        listing.fetch_price,
+        'date',
+        run_date=dt.datetime.now() + dt.timedelta(seconds=10),
+        misfire_grace_time=5,
+        kwargs={'symbol': 'MXUSDT'}
+    )
 
     while True:
-        print('Unlimited loop - start')
         await asyncio.sleep(5)
-        print('Unlimited loop - continue')
 
 if __name__ == '__main__':
     asyncio.run(main())
