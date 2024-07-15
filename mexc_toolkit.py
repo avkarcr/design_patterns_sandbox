@@ -107,7 +107,7 @@ class mexc_market(TOOL):
         response = self.public_request(self.method, url, params=params)
         return response.json()
 
-    def get_price(self, params=None):
+    async def get_price(self, params=None):
         """get symbol price ticker"""
         url = '{}{}'.format(self.api, '/ticker/price')
         response = self.public_request(self.method, url, params=params)
